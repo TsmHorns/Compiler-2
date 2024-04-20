@@ -230,6 +230,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Gets here 1 after tokenize :\n";
     auto program = parse(tokens);
     std::cout << "Gets here 2 after parse:\n";
+    return 0;
     std::unordered_map<std::string, int> context;
     for (auto& node : program) {
         std::cout << "Evaluating node\n";
