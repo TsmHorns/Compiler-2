@@ -212,14 +212,14 @@ std::vector<std::unique_ptr<ASTNode>> parse(std::vector<Token>& tokens) {
 
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
+    if (argc < 1) {
         std::cerr << "Usage: " << argv[0] << " <filename>\n";
         return 1;
     }
-
-    std::ifstream file(argv[1]);
+    std::string file_ = "in02.py";
+    std::ifstream file(file_);
     if (!file) {
-        std::cerr << "Could not open file " << argv[1] << "\n";
+        std::cerr << "Could not open file " << file_ << "\n";
         return 1;
     }
 
@@ -230,7 +230,8 @@ int main(int argc, char* argv[]) {
     std::cout << "Gets here 1 after tokenize :\n";
     auto program = parse(tokens);
     std::cout << "Gets here 2 after parse:\n";
-    return 0;
+    return 1;
+
     std::unordered_map<std::string, int> context;
     for (auto& node : program) {
         std::cout << "Evaluating node\n";
