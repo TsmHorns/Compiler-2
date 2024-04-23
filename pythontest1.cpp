@@ -1,268 +1,262 @@
 #include <iostream>
-#include <fstream>
-#include <vector>
-#include <string>
 #include <unordered_map>
 #include <memory>
+#include <variant>
+#include <fstream>
 #include <sstream>
+#include <vector>
+#include <filesystem>
+#include <variant>
+
+using ValueType = std::variant<int, std::string>;
+
+
 
 enum class TokenType {
-    ID, NUM, ASSIGN, PRINT, STRING, COLON, END, COMMENT, PLUS, 
-    LEFT_PAREN, RIGHT_PAREN, EQUALS, NUMBER, COMMA, NEWLINE, MINUS, 
-    GREATER_THAN, LESS_THAN, IF, LEFT_BRACE,RIGHT_BRACE,ELSE
+    ID, NUM, ASSIGN, PRINT, STRING, SEMICOLON, END, COMMENT, PLUS, MINUS, MULTIPLY, DIVIDE,
+    GREATER_THAN, LESS_THAN, GREATER_THAN_EQUAL, LESS_THAN_EQUAL, EQUALS, NOT_EQUALS,
+    LEFT_PAREN, RIGHT_PAREN, NUMBER, COMMA, NEWLINE, IF, ELSE, LEFT_BRACE, RIGHT_BRACE
 };
-
-
-void printTokenType(TokenType type) {
-    switch (type) {
-        case TokenType::ID:
-            std::cout << "ID";
-            break;
-        case TokenType::NUM:
-            std::cout << "NUM";
-            break;
-        case TokenType::ASSIGN:
-            std::cout << "ASSIGN";
-            break;
-        case TokenType::PRINT:
-            std::cout << "PRINT";
-            break;
-        case TokenType::STRING:
-            std::cout << "STRING";
-            break;
-        case TokenType::COLON:
-            std::cout << "COLON";
-            break;
-        case TokenType::END:
-            std::cout << "END";
-            break;
-        case TokenType::COMMENT:
-            std::cout << "COMMENT";
-            break;
-        case TokenType::PLUS:
-            std::cout << "PLUS";
-            break;
-        case TokenType::LEFT_PAREN:
-            std::cout << "LEFT_PAREN";
-            break;
-        case TokenType::RIGHT_PAREN:
-            std::cout << "RIGHT_PAREN";
-            break;
-        case TokenType::EQUALS:
-            std::cout << "EQUALS";
-            break;
-        case TokenType::NUMBER:
-            std::cout << "NUMBER";
-            break;
-        case TokenType::COMMA:
-            std::cout << "COMMA";
-            break;
-        case TokenType::NEWLINE:
-            std::cout << "NEWLINE";
-            break;
-        case TokenType::MINUS:
-            std::cout << "MINUS";
-            break;
-        case TokenType::GREATER_THAN:
-            std::cout << "GREATER_THAN";
-            break;
-        case TokenType::LESS_THAN:
-            std::cout << "LESS_THAN";
-            break;
-        case TokenType::IF:
-            std::cout << "IF";
-            break;
-        case TokenType::LEFT_BRACE:
-            std::cout << "LEFT_BRACE";
-            break;
-        case TokenType::RIGHT_BRACE:
-            std::cout << "RIGHT_BRACE";
-            break;
-        case TokenType::ELSE:
-            std::cout << "ELSE";
-            break;
-        default:
-            std::cout << "UNKNOWN";
-    }
-}
 
 struct Token {
     TokenType type;
     std::string value;
+
     Token(TokenType type, std::string value) : type(type), value(value) {}
 };
 
+template<typename T>
 class ASTNode {
 public:
     virtual ~ASTNode() = default;
     virtual void evaluate(std::unordered_map<std::string, int>& context) = 0;
 };
 
-class IntegerNode : public ASTNode {
-    int value;
+template<typename T>
+class IntegerNode : public ASTNode<T> {
+    T value;
 public:
-    IntegerNode(int val) : value(val) {}
+    IntegerNode(T val) : value(val) {}
     void evaluate(std::unordered_map<std::string, int>& context) override {
-        context["__expr_result"] = value;  // Set the result of expression evaluation
+        // This node evaluates to an integer
     }
 };
 
-class VariableNode : public ASTNode {
+template<typename T>
+class PrintNode : public ASTNode<T> {
+        std::tuple<std::unique_ptr<ASTNode<T>>, std::string> message;
+public:
+    template<typename... Args>
+     PrintNode(std::unique_ptr<ASTNode<T>> node, const std::string& str) 
+        : message(std::make_tuple(std::move(node), str)) {}
+
+     void evaluate(std::unordered_map<std::string, int>& context) override {
+        // implementation to evaluate message and print
+    }
+
+private:
+    template<typename Arg, typename... Args>
+    void printArgs(std::unordered_map<std::string, int>& context, Arg&& arg, Args&&... args) {
+        std::cout << evaluateArg(context, std::forward<Arg>(arg)) << " ";
+        printArgs(context, std::forward<Args>(args)...);
+    }
+
+    void printArgs(std::unordered_map<std::string, int>& context) {
+        std::cout << std::endl;
+    }
+
+    template<typename Arg>
+    auto evaluateArg(std::unordered_map<std::string, int>& context, Arg&& arg) {
+        if constexpr (std::is_same_v<std::decay_t<Arg>, std::string>) {
+            return arg;
+        } else {
+            return evaluateNode(arg, context);
+        }
+    }
+
+};
+
+template<typename T>
+class IfNode : public ASTNode<T> {
+    std::unique_ptr<ASTNode<T>> condition;
+    std::unique_ptr<ASTNode<T>> ifBlock;
+    std::unique_ptr<ASTNode<T>> elseBlock;  // Optional
+
+public:
+    IfNode(std::unique_ptr<ASTNode<T>> cond, std::unique_ptr<ASTNode<T>> ifBlk, std::unique_ptr<ASTNode<T>> elseBlk = nullptr)
+        : condition(std::move(cond)), ifBlock(std::move(ifBlk)), elseBlock(std::move(elseBlk)) {}
+
+    void evaluate(std::unordered_map<std::string, int>& context) override {
+        // Implementation depends on your runtime execution logic
+    }
+};
+
+
+template<typename T>
+class VariableNode : public ASTNode<T> {
     std::string name;
 public:
     VariableNode(const std::string& n) : name(n) {}
     void evaluate(std::unordered_map<std::string, int>& context) override {
-        if (context.find(name) != context.end()) {
-            context["__expr_result"] = context[name];
-        }
+        // Just access the variable from context
     }
 };
 
-class ComparisonNode : public ASTNode {
-    std::unique_ptr<ASTNode> left;
-    std::unique_ptr<ASTNode> right;
-    char op;
+template<typename T>
+class BinaryOperationNode : public ASTNode<T> {
+    std::unique_ptr<ASTNode<T>> left;
+    std::unique_ptr<ASTNode<T>> right;
+    TokenType op;
 public:
-    ComparisonNode(std::unique_ptr<ASTNode> l, std::unique_ptr<ASTNode> r, char oper)
-        : left(std::move(l)), right(std::move(r)), op(oper) {}
+    BinaryOperationNode(std::unique_ptr<ASTNode<T>> left, TokenType op, std::unique_ptr<ASTNode<T>> right)
+        : left(std::move(left)), op(op), right(std::move(right)) {}
 
     void evaluate(std::unordered_map<std::string, int>& context) override {
         left->evaluate(context);
         int leftVal = context["__expr_result"];
         right->evaluate(context);
         int rightVal = context["__expr_result"];
-        context["__expr_result"] = (op == '>' ? (leftVal > rightVal) : (leftVal < rightVal));
-    }
-};
-class IfElseNode : public ASTNode {
-    std::unique_ptr<ASTNode> condition;
-    std::vector<std::unique_ptr<ASTNode>> trueBranch, falseBranch;
 
-public:
-    IfElseNode(std::unique_ptr<ASTNode> cond, std::vector<std::unique_ptr<ASTNode>> trueBr, std::vector<std::unique_ptr<ASTNode>> falseBr)
-        : condition(std::move(cond)), trueBranch(std::move(trueBr)), falseBranch(std::move(falseBr)) {}
-
-    void evaluate(std::unordered_map<std::string, int>& context) override {
-        condition->evaluate(context);
-        if (context["__expr_result"]) {
-            for (auto& node : trueBranch) node->evaluate(context);
-        } else {
-            for (auto& node : falseBranch) node->evaluate(context);
+        switch (op) {
+            case TokenType::PLUS:
+                context["__expr_result"] = leftVal + rightVal;
+                break;
+            case TokenType::MINUS:
+                context["__expr_result"] = leftVal - rightVal;
+                break;
+            case TokenType::MULTIPLY:
+                context["__expr_result"] = leftVal * rightVal;
+                break;
+            case TokenType::DIVIDE:
+                context["__expr_result"] = leftVal / rightVal;
+                break;
+            case TokenType::GREATER_THAN:
+                context["__expr_result"] = (leftVal > rightVal);
+                break;
+            case TokenType::LESS_THAN:
+                context["__expr_result"] = (leftVal < rightVal);
+                break;
+            case TokenType::GREATER_THAN_EQUAL:
+                context["__expr_result"] = (leftVal >= rightVal);
+                break;
+            case TokenType::LESS_THAN_EQUAL:
+                context["__expr_result"] = (leftVal <= rightVal);
+                break;
+            case TokenType::EQUALS:
+                context["__expr_result"] = (leftVal == rightVal);
+                break;
+            case TokenType::NOT_EQUALS:
+                context["__expr_result"] = (leftVal != rightVal);
+                break;
+            default:
+                throw std::runtime_error("Unsupported binary operation");
         }
     }
 };
 
-class AssignmentNode : public ASTNode {
-    std::string variable;
-    std::unique_ptr<ASTNode> expression;
+template<typename T>
+class BlockNode : public ASTNode<T> {
+    std::vector<std::unique_ptr<ASTNode<T>>> statements;
 public:
-    AssignmentNode(const std::string& var, std::unique_ptr<ASTNode> expr)
+    BlockNode(std::vector<std::unique_ptr<ASTNode<T>>> stmts) : statements(std::move(stmts)) {}
+
+    void evaluate(std::unordered_map<std::string, int>& context) override {
+        for (auto& stmt : statements) {
+            stmt->evaluate(context);
+        }
+    }
+};
+
+template<typename T>
+class AssignmentNode : public ASTNode<T> {
+    std::string variable;
+    std::unique_ptr<ASTNode<T>> expression;
+public:
+    AssignmentNode(const std::string& var, std::unique_ptr<ASTNode<T>> expr)
         : variable(var), expression(std::move(expr)) {}
 
     void evaluate(std::unordered_map<std::string, int>& context) override {
-        expression->evaluate(context);  // Evaluate the expression
-        context[variable] = context["__expr_result"];  // Assign the result to the variable
-    }
-};
-
-class ExpressionNode : public ASTNode {
-    std::unique_ptr<ASTNode> left;
-    std::unique_ptr<ASTNode> right;
-    char op;
-public:
-    ExpressionNode(std::unique_ptr<ASTNode> l, std::unique_ptr<ASTNode> r, char oper)
-        : left(std::move(l)), right(std::move(r)), op(oper) {}
-
-    void evaluate(std::unordered_map<std::string, int>& context) override {
-        left->evaluate(context);
-        int leftVal = context["__expr_result"];
-        right->evaluate(context);
-        int rightVal = context["__expr_result"];
-
-        if (op == '+') {
-            context["__expr_result"] = leftVal + rightVal;
-        } else if (op == '-') {
-            context["__expr_result"] = leftVal - rightVal;
+        if (expression) {
+            expression->evaluate(context);
+            context[variable] = context["__expr_result"];
+        } else {
+            throw std::runtime_error("AssignmentNode: Expression is empty");
         }
     }
 };
 
-class PrintNode : public ASTNode {
-    std::string message;
-    std::string variable;
-public:
-    PrintNode(const std::string& msg, const std::string& var) : message(msg), variable(var) {}
 
-    void evaluate(std::unordered_map<std::string, int>& context) override {
-        std::cout << message << " " << (context.find(variable) != context.end() ? std::to_string(context[variable]) : "undefined") << std::endl;
-    }
-};
 
-std::vector<Token> tokenize(const std::string& input) {
+template<typename T>
+std::vector<Token> tokenize(const std::string& input)  {
     std::vector<Token> tokens;
     std::istringstream iss(input);
     std::string str;
     std::string comment;
     char ch;
+
     while (iss >> std::noskipws >> ch) {
-        // Handle whitespace characters
         if (isspace(ch)) {
             if (ch == '\n') {
-                tokens.emplace_back(TokenType::NEWLINE, "\\n");
+                continue; // Optionally handle new line specific logic
             }
-            continue;
+            continue; // Skip whitespace
         }
 
-        // Handle operators and special characters
         switch (ch) {
-            case '=':
+                case '>':
+            if (iss.peek() == '=') {
+                iss.get();
+                tokens.emplace_back(TokenType::GREATER_THAN_EQUAL, ">=");
+            } else {
+                tokens.emplace_back(TokenType::GREATER_THAN, ">");
+            }
+            break;
+        case '<':
+            if (iss.peek() == '=') {
+                iss.get();
+                tokens.emplace_back(TokenType::LESS_THAN_EQUAL, "<=");
+            } else {
+                tokens.emplace_back(TokenType::LESS_THAN, "<");
+            }
+            break;
+        case '=':
+            if (iss.peek() == '=') {
+                iss.get();
+                tokens.emplace_back(TokenType::EQUALS, "==");
+            } else {
                 tokens.emplace_back(TokenType::ASSIGN, "=");
-                break;
+            }
+            break;
             case '+':
                 tokens.emplace_back(TokenType::PLUS, "+");
-                break;
-            case '-':
-                tokens.emplace_back(TokenType::MINUS, "-");
+                std::cout << "Added token: PLUS, +" << std::endl;
                 break;
             case '(':
                 tokens.emplace_back(TokenType::LEFT_PAREN, "(");
+                std::cout << "Added token: LEFT_PAREN, (" << std::endl;
                 break;
             case ')':
                 tokens.emplace_back(TokenType::RIGHT_PAREN, ")");
+                std::cout << "Added token: RIGHT_PAREN, )" << std::endl;
                 break;
             case ',':
                 tokens.emplace_back(TokenType::COMMA, ",");
+                std::cout << "Added token: COMMA, ," << std::endl;
                 break;
             case ';':
-                tokens.emplace_back(TokenType::COLON, ";");
+                tokens.emplace_back(TokenType::SEMICOLON, ";");
+                std::cout << "Added token: SEMICOLON, ;" << std::endl;
                 break;
             case '\"':
                 getline(iss, str, '\"');
                 tokens.emplace_back(TokenType::STRING, str);
+                std::cout << "Added token: STRING, \"" << str << "\"" << std::endl;
                 break;
             case '#':
-                getline(iss, comment); // This reads the comment and moves the stream past the end of line
-                // No token is created for the comment
-                break;
-            case '>':
-                tokens.emplace_back(TokenType::GREATER_THAN, ">");
-                break;
-            case '<':
-                tokens.emplace_back(TokenType::LESS_THAN, "<");
-                break;
-            case 'i':  // Check for 'if' keyword
-                iss >> ch;  // Consume 'f'
-                tokens.emplace_back(TokenType::IF, "if");
-                break;
-            case 'e':  // Check for 'else' keyword
-                iss >> ch;  // Consume 'l'
-                iss >> ch;  // Consume 's'
-                iss >> ch;  // Consume 'e'
-                tokens.emplace_back(TokenType::ELSE, "else");
-                break;
-            case ':':
-                tokens.emplace_back(TokenType::COLON, ":");
-                tokens.emplace_back(TokenType::END, "");
+                getline(iss, comment);
+                tokens.emplace_back(TokenType::COMMENT, "#" + comment);
+                std::cout << "Added token: COMMENT, #" << comment << std::endl;
                 break;
             default:
                 if (isdigit(ch)) {
@@ -270,154 +264,225 @@ std::vector<Token> tokenize(const std::string& input) {
                     int num;
                     iss >> num;
                     tokens.emplace_back(TokenType::NUM, std::to_string(num));
+                    std::cout << "Added token: NUM, " << num << std::endl;
                 } else if (isalpha(ch)) {
                     std::string identifier(1, ch);
                     while (iss.peek() != EOF && isalnum(iss.peek())) {
                         iss >> ch;
                         identifier += ch;
                     }
-                    tokens.emplace_back(TokenType::ID, identifier);
+                    TokenType type = identifier == "print" ? TokenType::PRINT : TokenType::ID;
+                    tokens.emplace_back(type, identifier);
+                    std::cout << "Added token: " << (type == TokenType::PRINT ? "PRINT" : "ID") << ", " << identifier << std::endl;
                 }
                 break;
         }
     }
-
     tokens.emplace_back(TokenType::END, "");
+    std::cout << "Added token: END, " << std::endl;
     return tokens;
 }
 
+template<typename T>
+std::unique_ptr<ASTNode<T>> parseExpression(std::vector<Token>& tokens, typename std::vector<Token>::iterator& it);
 
-std::unique_ptr<ASTNode> parseExpression(std::vector<Token>::iterator& it, std::vector<Token>& tokens) {
-    std::unique_ptr<ASTNode> left;
+template<typename T>
+std::unique_ptr<ASTNode<T>> parsePrimary(std::vector<Token>& tokens, typename std::vector<Token>::iterator& it) {
+    if (it->type == TokenType::ID) {
+        std::string identifier = it->value;
+        ++it; // Consume the ID token
+        return std::make_unique<VariableNode<T>>(identifier);
+    } else if (it->type == TokenType::NUM) {
+        int value = std::stoi(it->value);
+        ++it; // Consume the NUM token
+        return std::make_unique<IntegerNode<T>>(value);
+    } else if (it->type == TokenType::LEFT_PAREN) {
+        ++it; // Consume the LEFT_PAREN token
+        auto expression = parseExpression<T>(tokens, it);
+        if (it->type != TokenType::RIGHT_PAREN) {
+            throw std::runtime_error("Expected ')' after expression");
+        }
+        ++it; // Consume the RIGHT_PAREN token
+        return expression;
+    } else {
+        throw std::runtime_error("Unexpected token in expression");
+    }
+}
 
-    // Handle the first part of the expression (number or variable)
-    if (it->type == TokenType::NUM) {
-        left = std::make_unique<IntegerNode>(std::stoi(it->value));
-        ++it;
-    } else if (it->type == TokenType::ID) {
-        left = std::make_unique<VariableNode>(it->value);
-        ++it;
+template <typename T>
+std::unique_ptr<IfNode<T>> parseIf(std::vector<Token>& tokens, typename std::vector<Token>::iterator& it);
+
+template <typename T>
+std::unique_ptr<PrintNode<T>> parsePrint(std::vector<Token>& tokens, typename std::vector<Token>::iterator& it);
+
+template <typename T>
+std::unique_ptr<AssignmentNode<T>> parseAssignment(std::vector<Token>& tokens, typename std::vector<Token>::iterator& it);
+
+template<typename T>
+std::unique_ptr<BlockNode<T>> parseBlock(std::vector<Token>& tokens, typename std::vector<Token>::iterator& it) {
+    std::vector<std::unique_ptr<ASTNode<T>>> statements;
+
+    // Parse statements until you reach 'ELSE', 'END', or unmatched 'NEWLINE'
+    while (it != tokens.end() && it->type != TokenType::ELSE && it->type != TokenType::END) {
+        if (it->type == TokenType::NEWLINE) {
+            ++it; // skip newlines within the block
+            continue;
+        } else if (it->type == TokenType::IF) {
+            statements.push_back(parseIf<T>(tokens, it));
+        } else if (it->type == TokenType::PRINT) {
+            statements.push_back(parsePrint<T>(tokens, it));
+        } else if (it->type == TokenType::ID) {
+            statements.push_back(parseAssignment<T>(tokens, it));
+        }
+        ++it; // Move to the next token
     }
 
-    // Handle binary operations
-    while (it != tokens.end() && (it->type == TokenType::PLUS || it->type == TokenType::MINUS || it->type == TokenType::GREATER_THAN || it->type == TokenType::LESS_THAN)) {
-        char op = it->value[0];
-        ++it; // move past the operator
+    return std::make_unique<BlockNode<T>>(std::move(statements));
+}
 
-        std::unique_ptr<ASTNode> right;
-        if (it->type == TokenType::NUM) {
-            right = std::make_unique<IntegerNode>(std::stoi(it->value));
-        } else if (it->type == TokenType::ID) {
-            right = std::make_unique<VariableNode>(it->value);
-        }
-        ++it; // move past the number or variable
 
-        // Create the appropriate node based on the operation
-        if (op == '+' || op == '-') {
-            left = std::make_unique<ExpressionNode>(std::move(left), std::move(right), op);
-        } else if (op == '>' || op == '<') {
-            left = std::make_unique<ComparisonNode>(std::move(left), std::move(right), op);
+template<typename T>
+std::unique_ptr<IfNode<T>> parseIf(std::vector<Token>& tokens, typename std::vector<Token>::iterator& it) {
+    ++it;  // Skip 'if'
+    auto condition = parseExpression<T>(tokens, it);
+    auto ifBlock = parseBlock<T>(tokens, it);
+
+    std::unique_ptr<BlockNode<T>> elseBlock = nullptr;
+    if (it != tokens.end() && it->type == TokenType::ELSE) {
+        ++it;  // Skip 'else'
+        elseBlock = parseBlock<T>(tokens, it);
+    }
+
+    return std::make_unique<IfNode<T>>(std::move(condition), std::move(ifBlock), std::move(elseBlock));
+}
+
+
+
+
+template<typename T>
+std::unique_ptr<ASTNode<T>> parseStatement(std::vector<Token>& tokens, typename std::vector<Token>::iterator& it) {
+    if (it->type == TokenType::ID) {
+        std::string varName = it->value;
+        ++it; // Skip the ID token
+        if (it->type == TokenType::ASSIGN) {
+            ++it; // Skip ASSIGN
+            auto expr = parseExpression<T>(tokens, it);
+            return std::make_unique<AssignmentNode<T>>(varName, std::move(expr));
         }
+    }
+    throw std::runtime_error("Parsing error: Expected a statement");
+}
+
+
+
+
+template<typename T>
+std::unique_ptr<ASTNode<T>> parseTerm(std::vector<Token>& tokens, typename std::vector<Token>::iterator& it) {
+    auto left = parsePrimary<T>(tokens, it);
+
+    while (it != tokens.end() && (it->type == TokenType::MULTIPLY || it->type == TokenType::DIVIDE)) {
+        TokenType op = it->type;
+        ++it; // Consume the operator token
+        auto right = parsePrimary<T>(tokens, it);
+        left = std::make_unique<BinaryOperationNode<T>>(std::move(left), op, std::move(right));
     }
 
     return left;
 }
 
-std::unique_ptr<ASTNode> parseStatement(std::vector<Token>::iterator& it, std::vector<Token>& tokens) {
-    if (it->type == TokenType::ID) {
-        std::string varName = it->value;
-        ++it;  // Expect ASSIGN
-        if (it != tokens.end() && it->type == TokenType::ASSIGN) {
-            ++it;  // Move to expression
-            auto exprNode = parseExpression(it, tokens);
-            return std::make_unique<AssignmentNode>(varName, std::move(exprNode));
-        }
-    } else if (it->type == TokenType::PRINT) {
-        // Assume proper print handling as above
-        // Just advance iterator appropriately
+template<typename T>
+std::unique_ptr<ASTNode<T>> parseExpression(std::vector<Token>& tokens, typename std::vector<Token>::iterator& it) {
+    auto left = parseTerm<T>(tokens, it);
+
+    while (it != tokens.end() && (it->type == TokenType::PLUS || it->type == TokenType::MINUS)) {
+        TokenType op = it->type;
+        ++it; // Consume the operator token
+        auto right = parseTerm<T>(tokens, it);
+        left = std::make_unique<BinaryOperationNode<T>>(std::move(left), op, std::move(right));
     }
-    return nullptr; // or handle other statement types
+
+    return left;
 }
 
-std::vector<std::unique_ptr<ASTNode>> parse(std::vector<Token>& tokens) {
-    std::vector<std::unique_ptr<ASTNode>> program;
+template<typename T>
+std::unique_ptr<PrintNode<T>> parsePrint(std::vector<Token>& tokens, typename std::vector<Token>::iterator& it) {
+    ++it; // Skip the 'print' keyword
+    if (it->type != TokenType::LEFT_PAREN) {
+        throw std::runtime_error("Expected '(' after 'print'");
+    }
+    ++it; // Skip '('
+    auto expr = parseExpression<T>(tokens, it);
+    if (it->type != TokenType::RIGHT_PAREN) {
+        throw std::runtime_error("Expected ')' after expression");
+    }
+    ++it; // Skip ')'
+    return std::make_unique<PrintNode<T>>(std::move(expr), "print");
+}
+
+template<typename T>
+std::unique_ptr<AssignmentNode<T>> parseAssignment(std::vector<Token>& tokens, typename std::vector<Token>::iterator& it) {
+    std::string varName = it->value;
+    
+
+    ++it; // Skip the variable name
+    if (it->type != TokenType::ASSIGN) {
+        throw std::runtime_error("Expected '=' after variable name");
+    }
+    
+    ++it; // Skip '='
+    auto expr = parseExpression<T>(tokens, it);
+    if (it->type != TokenType::NEWLINE && it->type != TokenType::END) {
+        ++it; // Skip to the end of the statement
+    }
+    return std::make_unique<AssignmentNode<T>>(varName, std::move(expr));
+}
+
+
+template<typename T>
+std::vector<std::unique_ptr<ASTNode<T>>> parse(std::vector<Token>& tokens) {
+    std::vector<std::unique_ptr<ASTNode<T>>> program;
     auto it = tokens.begin();
 
     while (it != tokens.end() && it->type != TokenType::END) {
-        // Skip newline tokens
-        if (it->type == TokenType::NEWLINE) {
-            ++it;
-            continue;
-        }
+        std::cout << "Processing token: " << it->value << " of type: " << static_cast<int>(it->type) << "\n";
 
-        std::cout << "Token type: ";
-        printTokenType(it->type);
-        std::cout << std::endl;
-
-        if (it->type == TokenType::ID) {
-            std::string varName = it->value;
-            ++it;  // Check for ASSIGN
-            if (it != tokens.end() && it->type == TokenType::ASSIGN) {
-                ++it;  // Move to the expression
-                std::unique_ptr<ASTNode> exprNode = parseExpression(it, tokens);
-                program.push_back(std::make_unique<AssignmentNode>(varName, std::move(exprNode)));
-            }
-        } else if (it->type == TokenType::IF) {  // Handle if-else
-            ++it; // Assuming 'if' is already consumed
-            std::unique_ptr<ASTNode> cond = parseExpression(it, tokens);
-            std::vector<std::unique_ptr<ASTNode>> trueBranch, falseBranch;
-
-            if (it->type == TokenType::LEFT_BRACE) {
-                ++it;  // Skip '{'
-                while (it != tokens.end() && it->type != TokenType::RIGHT_BRACE) {
-                    trueBranch.push_back(parseStatement(it, tokens));
+        switch (it->type) {
+            case TokenType::COMMENT:
+                // Skip comments
+                ++it;
+                while (it != tokens.end() && it->type == TokenType::NEWLINE) {
+                    ++it; // Skip newlines that may follow comments directly
                 }
-                ++it;  // Skip '}'
-            }
-
-            if (it != tokens.end() && it->type == TokenType::ELSE) {
-                ++it;  // Skip 'else'
-                if (it->type == TokenType::LEFT_BRACE) {
-                    ++it;  // Skip '{'
-                    while (it != tokens.end() && it->type != TokenType::RIGHT_BRACE) {
-                        falseBranch.push_back(parseStatement(it, tokens));
-                    }
-                    ++it;  // Skip '}'
+                break;
+            case TokenType::NEWLINE:
+                // Skip newlines
+                ++it;
+                break;
+            case TokenType::PRINT:
+                // Handle print statements
+                program.push_back(parsePrint<T>(tokens, it));
+                break;
+            case TokenType::IF:
+                // Handle if statements
+                program.push_back(parseIf<T>(tokens, it));
+                break;
+            case TokenType::ID:
+                // Handle assignments and other ID-based statements
+                if (std::next(it) != tokens.end() && std::next(it)->type == TokenType::ASSIGN) {
+                    program.push_back(parseAssignment<T>(tokens, it));
+                } else {
+                    ++it; // Skip the ID if it's not part of an assignment
                 }
-            }
-
-            program.push_back(std::make_unique<IfElseNode>(std::move(cond), std::move(trueBranch), std::move(falseBranch)));
-        } else if (it->type == TokenType::PRINT) {  // Handle print
-            ++it; // Skip 'print'
-            if (it->type == TokenType::LEFT_PAREN) {
-                ++it; // Skip '('
-                if (it->type == TokenType::STRING) {
-                    std::string msg = it->value;
-                    ++it; // Skip the string token
-                    if (it->type == TokenType::COMMA) {
-                        ++it; // Skip ','
-                        if (it->type == TokenType::ID) {
-                            std::string var = it->value;
-                            ++it; // Skip variable name
-                            if (it->type == TokenType::RIGHT_PAREN) {
-                                ++it; // Skip ')'
-                                program.push_back(std::make_unique<PrintNode>(msg, var));
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            std::cerr << "Syntax Error: Unexpected token '" << it->value << "' of type " << static_cast<int>(it->type) << " at position: " << std::distance(tokens.begin(), it) << std::endl;
-            return {};
+                break;
+            default:
+                // Advance past unrecognized tokens
+                ++it;
+                break;
         }
     }
 
     return program;
 }
-
-
-
 
 
 int main(int argc, char* argv[]) {
@@ -431,18 +496,22 @@ int main(int argc, char* argv[]) {
         std::cerr << "Could not open file " << argv[1] << "\n";
         return 1;
     }
-
+    
     std::stringstream buffer;
     buffer << file.rdbuf();
     std::string input = buffer.str();
-    auto tokens = tokenize(input);
-    auto program = parse(tokens);
+    auto tokens = tokenize<ValueType>(input);
+    auto program = parse<ValueType>(tokens);
+
     std::unordered_map<std::string, int> context;
     for (auto& node : program) {
         node->evaluate(context);
     }
 
-    std::cout << "Program executed "<< std::endl;
+    std::cout << "Final context values:\n";
+    for (const auto& pair : context) {
+        std::cout << pair.first << " = " << pair.second << "\n";
+    }
 
     return 0;
 }
