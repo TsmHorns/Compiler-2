@@ -171,30 +171,41 @@ std::unique_ptr<ASTNode> parseExpression(std::vector<Token>& tokens, std::vector
 }
 
 std::unique_ptr<ASTNode> parseFactor(std::vector<Token>& tokens, std::vector<Token>::iterator& it) {
-    if (it->type == TokenType::NUM) {
-        int value = std::stoi(it->value);
-        ++it;  // Consume the NUM token
-        return std::make_unique<IntegerNode>(value);
-    } else if (it->type == TokenType::ID) {
-        std::string varName = it->value;
-        ++it;  // Consume the ID token
-        // Consume any possible commas
-        while (it != tokens.end() && it->type == TokenType::COMMA) {
-            ++it;  // Consume ','
-        }
-        return std::make_unique<VariableNode>(varName);
-    } else if (it->type == TokenType::LEFT_PAREN) {
-        ++it;  // Consume '('
-        auto expr = parseExpression(tokens, it);
-        if (it->type != TokenType::RIGHT_PAREN) {
-            throw std::runtime_error("Expected ')' after expression in parse factor");
-        }
-        ++it;  // Consume ')'
-        return expr;
-    } else {
-        throw std::runtime_error("Syntax error: unexpected token in expression in parse factor ");
+    switch (it->type) {
+        case TokenType::NUM:
+            {
+                int value = std::stoi(it->value);
+                ++it;  // Consume the NUM token
+                return std::make_unique<IntegerNode>(value);
+            }
+        case TokenType::ID:
+            {
+                std::string varName = it->value;
+                ++it;  // Consume the ID token
+                while (it != tokens.end() && it->type == TokenType::COMMA) {
+                    ++it;  // Consume ','
+                }
+                return std::make_unique<VariableNode>(varName);
+            }
+        case TokenType::LEFT_PAREN:
+            {
+                ++it;  // Consume '('
+                auto expr = parseExpression(tokens, it);
+                if (it->type != TokenType::RIGHT_PAREN) {
+                    throw std::runtime_error("Expected ')' after expression");
+                }
+                ++it;  // Consume ')'
+                return expr;
+            }
+        default:
+            {
+                std::cout << "Unexpected token in parseFactor: " << it->value << " of type " << static_cast<int>(it->type) << std::endl;
+                throw std::runtime_error("Syntax error: unexpected token in expression in parse factor ");
+            }
     }
 }
+
+
 
 // Define StringNode correctly
 class StringNode : public ASTNode {
@@ -393,21 +404,6 @@ std::unique_ptr<ASTNode> parseIf(std::vector<Token>& tokens, std::vector<Token>:
     return std::make_unique<IfNode>(std::move(condition), std::move(ifBlock), std::move(elseBlock)); // Debugging: Created if node
 }
 
-std::unique_ptr<ASTNode> parseAssignment(std::vector<Token>& tokens, std::vector<Token>::iterator& it) { // Debugging: Defined parseAssignment function
-    std::string id = it->value; // Debugging: Get variable name
-    ++it; // Debugging: Skip the ID token
-    ++it; // Debugging: Skip the '=' token
-    auto expression = parseExpression(tokens, it); // Debugging: Parsed expression
-    return std::make_unique<AssignmentNode>(id, std::move(expression)); // Debugging: Created assignment node
-}
-
-int getVariableValue(const std::string& id, const std::unordered_map<std::string, int>& context) { // Debugging: Defined getVariableValue function
-    if (context.find(id) != context.end()) { // Debugging: Checked if variable exists in context
-        return context.at(id); // Debugging: Returned variable value
-    } else {
-        throw std::runtime_error("Variable not found: " + id); // Debugging: Threw error if variable not found
-    }
-}
 
 
 
@@ -427,19 +423,36 @@ void evaluateAssignment(const std::string& id, const std::string& expression, st
 }
 
 
+std::unique_ptr<ASTNode> parseAssignment(std::vector<Token>& tokens, std::vector<Token>::iterator& it) { // Debugging: Defined parseAssignment function
+    std::cout << "gets into parse assignment" << "\n";
+    std::string id = it->value; // Debugging: Get variable name
+    ++it; // Debugging: Skip the ID token
+    ++it; // Debugging: Skip the '=' token
+    auto expression = parseExpression(tokens, it); // Debugging: Parsed expression
+    std::cout << "gets into end of parse assignment" << "\n";
+    return std::make_unique<AssignmentNode>(id, std::move(expression)); // Debugging: Created assignment node
+}
 
+int getVariableValue(const std::string& id, const std::unordered_map<std::string, int>& context) { // Debugging: Defined getVariableValue function
+    if (context.find(id) != context.end()) { // Debugging: Checked if variable exists in context
+        return context.at(id); // Debugging: Returned variable value
+    } else {
+        throw std::runtime_error("Variable not found: " + id); // Debugging: Threw error if variable not found
+    }
+}
 
 
 
 std::vector<std::unique_ptr<ASTNode>> parse(std::vector<Token>& tokens) {
+    std::cout << "************************************" << std::endl;
     std::cout << "Entering parse" << std::endl;
-    std::cout  << "\n";
+    std::cout << "\n";
     std::vector<std::unique_ptr<ASTNode>> program;
     std::unordered_map<std::string, int> context;
     auto it = tokens.begin();
 
     while (it != tokens.end() && it->type != TokenType::END) {
-        std::cout << "Parsing token: " << it->value << std::endl; // Print the token being parsed
+        std::cout << "Current token: " << it->value << " Character: " << it->value<< std::endl; // Print the current token and character
 
         // Skip comments
         if (it->type == TokenType::COMMENT) {
@@ -449,30 +462,38 @@ std::vector<std::unique_ptr<ASTNode>> parse(std::vector<Token>& tokens) {
 
         switch (it->type) {
             case TokenType::PRINT: {
-                std::cout << (it->value) << "\n";
+                std::cout << "Parsing PRINT statement" << std::endl;
                 auto printNode = parsePrintStatement(tokens, it); // Correct call
 
                 program.push_back(std::move(printNode));
                 break;
             }
             case TokenType::ID: {
+                std::cout << "Parsing assignment statement" << std::endl;
                 auto assignmentNode = parseAssignment(tokens, it);
                 program.push_back(std::move(assignmentNode));
                 break;
             }
             case TokenType::IF: {
+                std::cout << "Parsing IF statement" << std::endl;
                 auto ifNode = parseIf(tokens, it);
                 program.push_back(std::move(ifNode));
+                break;
+            }
+             case TokenType::ASSIGN: {
+                std::cout << "Parsing Assign statement" << std::endl;
+                auto AssignmentNode = parseAssignment(tokens, it);
+                program.push_back(std::move(AssignmentNode));
                 break;
             }
             default:
                 throw std::runtime_error("Unexpected token in parse");
         }
-         std::cout  << "\n";
+        std::cout << "\n";
     }
-    std::cout  << "\n";
+    std::cout << "\n";
     std::cout << "Exiting parse" << std::endl;
-    std::cout  << "\n";
+    std::cout << "\n";
     return program;
 }
 
