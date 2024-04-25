@@ -171,39 +171,72 @@ std::unique_ptr<ASTNode> parseExpression(std::vector<Token>& tokens, std::vector
 }
 
 std::unique_ptr<ASTNode> parseFactor(std::vector<Token>& tokens, std::vector<Token>::iterator& it) {
+    std::unique_ptr<ASTNode> left;
+
     switch (it->type) {
         case TokenType::NUM:
             {
                 int value = std::stoi(it->value);
+                left = std::make_unique<IntegerNode>(value);
                 ++it;  // Consume the NUM token
-                return std::make_unique<IntegerNode>(value);
+                break;
             }
         case TokenType::ID:
             {
                 std::string varName = it->value;
+                left = std::make_unique<VariableNode>(varName);
                 ++it;  // Consume the ID token
-                while (it != tokens.end() && it->type == TokenType::COMMA) {
-                    ++it;  // Consume ','
-                }
-                return std::make_unique<VariableNode>(varName);
+                break;
             }
         case TokenType::LEFT_PAREN:
             {
                 ++it;  // Consume '('
-                auto expr = parseExpression(tokens, it);
+                left = parseExpression(tokens, it);
                 if (it->type != TokenType::RIGHT_PAREN) {
                     throw std::runtime_error("Expected ')' after expression");
                 }
                 ++it;  // Consume ')'
-                return expr;
+                break;
             }
+        case TokenType::MULTIPLY:
+    {
+        ++it;  // Consume the '*' token
+        auto right = parseFactor(tokens, it); // Parse the right operand
+        left = std::make_unique<BinaryOperationNode>(std::move(left), TokenType::MULTIPLY, std::move(right));
+        break;
+    }
+case TokenType::DIVIDE:
+    {
+        ++it;  // Consume the '/' token
+        auto right = parseFactor(tokens, it); // Parse the right operand
+        left = std::make_unique<BinaryOperationNode>(std::move(left), TokenType::DIVIDE, std::move(right));
+        break;
+    }
+case TokenType::PLUS:
+    {
+        ++it;  // Consume the '+' token
+        auto right = parseTerm(tokens, it); // Parse the right operand, assuming higher precedence operations are resolved in `parseTerm`
+        left = std::make_unique<BinaryOperationNode>(std::move(left), TokenType::PLUS, std::move(right));
+        break;
+    }
+case TokenType::MINUS:
+    {
+        ++it;  // Consume the '-' token
+        auto right = parseTerm(tokens, it); // Parse the right operand, assuming higher precedence operations are resolved in `parseTerm`
+        left = std::make_unique<BinaryOperationNode>(std::move(left), TokenType::MINUS, std::move(right));
+        break;
+    }
+
         default:
             {
                 std::cout << "Unexpected token in parseFactor: " << it->value << " of type " << static_cast<int>(it->type) << std::endl;
-                throw std::runtime_error("Syntax error: unexpected token in expression in parse factor ");
+                throw std::runtime_error("Syntax error: unexpected token in expression in parse factor");
             }
     }
+
+    return left;
 }
+
 
 
 
