@@ -144,17 +144,14 @@ public:
 
 
 
-void parseFunctionDef(const std::vector<Token>& tokens) {
-    // Extract the function name from tokens
-    std::string functionName = tokens[0].value; // replace `value` with the correct method or property
-
-    // Create a vector of Tokens for the body
-    std::vector<Token> bodyTokens;
-    for (auto it = tokens.begin() + 1; it != tokens.end(); ++it) {
-        bodyTokens.push_back(*it);
+void parseFunctionDef(std::vector<std::string>& tokens, Interpreter& interpreter) {
+    if (tokens.empty()) {
+        // Handle the error, e.g. by returning from the function
+        std::cerr << "Error: tokens is empty\n";
+        return;
     }
 
-    functions[functionName] = std::make_unique<FunctionDefNode>(functionName, bodyTokens);
+    // Rest of the function...
 }
 
 void parseFunctionCall(const Token& token) {
@@ -209,9 +206,9 @@ public:
     for (auto& part : parts) {
         part->evaluate(contexts, functions);
         int result = contexts.top()["__expr_result"];
-        std::cout << result << " ";
+        //std::cout << result << " ";
     }
-    std::cout << std::endl;
+    //std::cout << std::endl;
 }
 
     
@@ -315,7 +312,7 @@ std::vector<Token> tokenize(const std::string& input, Interpreter& interpreter) 
         if (line.substr(indentLevel, 3) == "def") {
     std::string functionName = line.substr(indentLevel + 4);  // Extract the function name
     tokens.emplace_back(TokenType::FUNCTION_DEF, functionName, currentIndentLevel);  // Emplace the def token with the function name as its value
-    std::cout << "\nEmplacing def with name: " << functionName << "\nIndent level: " << currentIndentLevel << "\n";
+    //std::cout << "\nEmplacing def with name: " << functionName << "\nIndent level: " << currentIndentLevel << "\n";
     currentFunctionName = functionName;  // Assign the current function name
 
     // Create a FunctionDefNode from tokens
@@ -327,35 +324,35 @@ std::vector<Token> tokenize(const std::string& input, Interpreter& interpreter) 
 }
         else if (line.substr(indentLevel, 5) == "print") {
             tokens.emplace_back(TokenType::PRINT, line, currentIndentLevel);
-            std::cout << "Emplacing PRINT token with value: " << line << std::endl;
+            //std::cout << "Emplacing PRINT token with value: " << line << std::endl;
         } 
         else if (line.find('(') != std::string::npos && line.find(')') != std::string::npos && line.find('=') != std::string::npos) {
             tokens.emplace_back(TokenType::ASSIGNMENT_FUNCTION_CALL, line, currentIndentLevel);  // Emplace the assignment function call token with the entire line as its value
-            std::cout << "\nEmplacing ASSIGNMENT_FUNCTION_CALL token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
+            //std::cout << "\nEmplacing ASSIGNMENT_FUNCTION_CALL token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
         } else if (line.find('=') != std::string::npos) {
             tokens.emplace_back(TokenType::ASSIGN, line, currentIndentLevel);
-            std::cout << "\nEmplacing ASSIGNMENT token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
+            //std::cout << "\nEmplacing ASSIGNMENT token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
         }
         else if (line.find("return") != std::string::npos) {
             tokens.emplace_back(TokenType::RETURN, line, currentIndentLevel);  // Emplace the return token with the entire line as its value
-            std::cout << "\nEmplacing RETURN token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
+            //std::cout << "\nEmplacing RETURN token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
         } else if (line.find(currentFunctionName) != std::string::npos) {
             tokens.emplace_back(TokenType::FUNCTION_CALL, line, currentIndentLevel);  // Emplace the function call token with the entire line as its value
-            std::cout << "\nEmplacing FUNCTION_CALL token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
+            //std::cout << "\nEmplacing FUNCTION_CALL token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
         } 
         if (line.substr(indentLevel, 2) == "if") {
             tokens.emplace_back(TokenType::IF, line, currentIndentLevel);
-            std::cout << "\nEmplacing IF token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
+            //std::cout << "\nEmplacing IF token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
         } else if (line.substr(indentLevel, 4) == "else") {
             tokens.emplace_back(TokenType::ELSE, "", currentIndentLevel);
-            std::cout << "\nEmplacing ELSE token\nIndent level: " << currentIndentLevel << "\n";
+            //std::cout << "\nEmplacing ELSE token\nIndent level: " << currentIndentLevel << "\n";
         }
         
     }
 
-    std::cout << "\nEmplacing END token\n";
+    //std::cout << "\nEmplacing END token\n";
     tokens.emplace_back(TokenType::END, "", 0);
-    std::cout << "\nFinished tokenizing\n";
+    //std::cout << "\nFinished tokenizing\n";
     return tokens;
 }
 
@@ -363,14 +360,14 @@ int precedence(TokenType op) {
     switch (op) {
         case TokenType::PLUS:
         case TokenType::MINUS:
-            std::cout << "Operator precedence for PLUS or MINUS\n";
+            //std::cout << "Operator precedence for PLUS or MINUS\n";
             return 1;
         case TokenType::MULTIPLY:
         case TokenType::DIVIDE:
-            std::cout << "Operator precedence for MULTIPLY or DIVIDE\n";
+            //std::cout << "Operator precedence for MULTIPLY or DIVIDE\n";
             return 2;
         default:
-            std::cout << "Operator precedence default\n";
+            //std::cout << "Operator precedence default\n";
             return 0;
     }
 }
@@ -379,15 +376,15 @@ int precedence(TokenType op) {
 void processOperator(TokenType op, std::stack<int>& operands, std::unordered_map<std::string, int>& context, Interpreter& interpret) {
     if (operands.size() < 2) {
         int numOperands = operands.size();
-        std::cout << "Debug: Current token is " << interpret.getCurrentToken() << std::endl;
-        std::cout << "Debug: Value of val is " << context["val"] << std::endl;
+        //std::cout << "Debug: Current token is " << interpret.getCurrentToken() << std::endl;
+        //std::cout << "Debug: Value of val is " << context["val"] << std::endl;
         std::cerr << "Error: Not enough operands for operator. Needed 2, found " << numOperands << std::endl;
         throw std::runtime_error("Not enough operands for operator: " + std::to_string(static_cast<int>(op)) + ". Needed 2, found " + std::to_string(numOperands));
     }
     int right = operands.top(); operands.pop();
     int left = operands.top(); operands.pop();
 
-    std::cout << "Processing operator " << static_cast<int>(op) << " with operands " << left << " and " << right << std::endl;
+    //std::cout << "Processing operator " << static_cast<int>(op) << " with operands " << left << " and " << right << std::endl;
 
     switch (op) {
         case TokenType::PLUS: operands.push(left + right); break;
@@ -409,7 +406,7 @@ void processOperator(TokenType op, std::stack<int>& operands, std::unordered_map
 
 
 void evaluateAssignment(const std::string& id, const std::string& expression, std::unordered_map<std::string, int>& context) {
-    std::cout << "Evaluating assignment: " << id << " = " << expression << std::endl;
+    //std::cout << "Evaluating assignment: " << id << " = " << expression << std::endl;
 
     // Evaluate the expression and store the result in the context
     std::istringstream iss(expression);
@@ -433,7 +430,7 @@ int getVariableValue(const std::string& id, const std::unordered_map<std::string
 
 
 void parseEnd(const Token& token, Interpreter& interpreter) {
-    std::cout << "Parsed end token." << std::endl;
+    //std::cout << "Parsed end token." << std::endl;
 }
 
 
@@ -442,14 +439,14 @@ int evaluateExpression(const std::vector<std::string>& parts, std::unordered_map
     std::stack<TokenType> operators;
 
     for (const auto& part : parts) {
-        std::cout << "Evaluating part: " << part << std::endl;
+        //std::cout << "Evaluating part: " << part << std::endl;
         if (isdigit(part[0])) {  // If the part is a number
             operands.push(std::stoi(part));
         } else if (isalpha(part[0])) {  // If the part is a variable
             operands.push(context[part]);
         } else {  // If the part is an operator
             TokenType op = getTokenType(part[0]);
-            std::cout << "Encountered operator: " << static_cast<int>(op) << std::endl;
+            //std::cout << "Encountered operator: " << static_cast<int>(op) << std::endl;
             while (!operators.empty() && precedence(op) <= precedence(operators.top())) {
                 if (operands.size() < 2) {
                     std::cerr << "Error: Not enough operands for operator. Needed 2, found " << operands.size() << std::endl;
@@ -610,7 +607,7 @@ void parseAssignmentFunctionCall(const Token& token, std::unordered_map<std::str
 }
 
 void parseProgram(const std::vector<Token>& tokens, std::unordered_map<std::string, int>& context, std::vector<Token>& printStatements, Interpreter& interpreter) {
-    std::cout << "*************************" << "\n";
+    //std::cout << "*************************" << "\n";
     size_t i = 0;
     for (const Token& token : tokens) {
         switch (token.type) {
@@ -625,15 +622,7 @@ void parseProgram(const std::vector<Token>& tokens, std::unordered_map<std::stri
                 parseEnd(token, interpreter);
                 break;
              case TokenType::FUNCTION_DEF: {
-                std::vector<Token> functionTokens;
-                // Increment `i` to skip the function definition token
-                i++;
-                // Collect all tokens that belong to the function definition
-                while (i < tokens.size() && tokens[i].indent_level != 0) {
-                functionTokens.push_back(tokens[i]);
-                i++;
-            }
-                parseFunctionDef(functionTokens, interpreter);
+               // std:: cout << "O have seg fault here.. sorry " << "\n";
                 break;
             }
             case TokenType::SCOPE:
@@ -650,13 +639,13 @@ void parseProgram(const std::vector<Token>& tokens, std::unordered_map<std::stri
                 parseReturn(token, interpreter);
                 break;
             case TokenType::ASSIGNMENT_FUNCTION_CALL:
-                parseAssignmentFunctionCall(token, context, interpreter);
+               // parseAssignmentFunctionCall(token, context, interpreter);
                 break;
              case TokenType::IF:
-                std::cout << "Encountered IF token with value: " << token.value << "\n";
+                //std::cout << "Encountered IF token with value: " << token.value << "\n";
                 break;
             case TokenType::ELSE:
-                std::cout << "Encountered ELSE token\n";
+                //std::cout << "Encountered ELSE token\n";
                 break;
             default:
                 std::stringstream ss;
@@ -664,7 +653,7 @@ void parseProgram(const std::vector<Token>& tokens, std::unordered_map<std::stri
                 throw std::runtime_error(ss.str());
         }
     }
-    std::cout << "*************************" << "\n";
+    //std::cout << "*************************" << "\n";
 }
 
 
@@ -694,11 +683,11 @@ int main(int argc, char* argv[]) {
     parseProgram(tokens, context, printStatements, interpreter);  // Pass the Interpreter object to the parseProgram function
 
        // Optionally print all context variables
-    std::cout << "Final Variable Values:\n";
+    //std::cout << "Final Variable Values:\n";
     for (const auto& pair : context) {
-        std::cout << pair.first << " = " << pair.second << std::endl;
+        //std::cout << pair.first << " = " << pair.second << std::endl;
     }
-    std:: cout << "********************" << "\n";
+    //std:: cout << "********************" << "\n";
     // Now handle print statements
     for (const auto& token : printStatements) {
         parsePrint(token, context, interpreter);  // Pass the Interpreter object to the parsePrint function
