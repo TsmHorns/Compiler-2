@@ -262,26 +262,30 @@ std::vector<Token> tokenize(const std::string& input, Interpreter& interpreter) 
     std::vector<Token> tokens;
     std::istringstream iss(input);
     std::string line;
-    int spacesPerIndent = 2;  // Adjust this to match your language's indentation rules
+    int spacesPerIndent = -1;  // We'll calculate this based on the first non-empty line
     int currentIndentLevel = 0;  // Keep track of the current indentation level
     std::string currentFunctionName;  // Keep track of the current function name
 
     int indentLevel = 0;
     while (std::getline(iss, line)) {
-    while (!line.empty() && std::iscntrl(line.back())) {
-        line.pop_back();  // Remove trailing control character
-    }
+        while (!line.empty() && std::iscntrl(line.back())) {
+            line.pop_back();  // Remove trailing control character
+        }
 
-    if (line.empty() || line[0] == '#') {
-        continue; // Skip empty lines and comments
-    }
+        if (line.empty() || line[0] == '#') {
+            continue; // Skip empty lines and comments
+        }
 
-    indentLevel = 0;
-    while (indentLevel < line.size() && line[indentLevel] == ' ') {
-        ++indentLevel;
-    }
+        indentLevel = 0;
+        while (indentLevel < line.size() && line[indentLevel] == ' ') {
+            ++indentLevel;
+        }
+
+        if (spacesPerIndent != 0) {
     indentLevel /= spacesPerIndent;  // Calculate the indentation level
+}
 
+        indentLevel /= spacesPerIndent;  // Calculate the indentation level
     if (indentLevel < currentIndentLevel) {
         currentFunctionName = "";
         currentIndentLevel = indentLevel;
