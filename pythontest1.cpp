@@ -215,58 +215,36 @@ int precedence(TokenType op) {
     }
 }
 
+
 void processOperator(TokenType op, std::stack<int>& operands, std::unordered_map<std::string, int>& context) {
-    int left, right;
-    int var; // Declare var outside the switch statement
+    if (operands.size() < 2) {
+        int numOperands = operands.size();
+        std::cerr << "Error: Not enough operands for operator. Needed 2, found " << numOperands << std::endl;
+        throw std::runtime_error("Not enough operands for operator: " + std::to_string(static_cast<int>(op)) + ". Needed 2, found " + std::to_string(numOperands));
+    }
+
+    int right = operands.top(); operands.pop();
+    int left = operands.top(); operands.pop();
+
+    std::cout << "Processing operator " << static_cast<int>(op) << " with operands " << left << " and " << right << std::endl;
+
     switch (op) {
-        case TokenType::PLUS:
-        case TokenType::MINUS:
-        case TokenType::MULTIPLY:
+        case TokenType::PLUS: operands.push(left + right); break;
+        case TokenType::MINUS: operands.push(left - right); break;
+        case TokenType::MULTIPLY: operands.push(left * right); break;
         case TokenType::DIVIDE:
-            if (operands.size() < 2) {
-                throw std::runtime_error("Not enough operands for operator.");
+            if (right == 0) {
+                throw std::runtime_error("Division by zero.");
             }
-            right = operands.top();
-            operands.pop();
-            left = operands.top();
-            operands.pop();
-            if (op == TokenType::PLUS) {
-                operands.push(left + right);
-            } else if (op == TokenType::MINUS) {
-                operands.push(left - right);
-            } else if (op == TokenType::MULTIPLY) {
-                operands.push(left * right);
-            } else if (op == TokenType::DIVIDE) {
-                if (right == 0) {
-                    throw std::runtime_error("Division by zero.");
-                }
-                operands.push(left / right);
-            }
-            break;
-        case TokenType::ASSIGN:
-            if (operands.size() < 2) {
-                throw std::runtime_error("Not enough operands for assignment.");
-            }
-            right = operands.top();
-            operands.pop();
-            left = operands.top();
-            operands.pop();
-            context[std::to_string(left)] = right;
-            break;
-        case TokenType::PRINT:
-            if (operands.empty()) {
-                throw std::runtime_error("No operand for printing.");
-            }
-            var = operands.top();
-            operands.pop();
-            if (context.find(std::to_string(var)) != context.end()) {
-                std::cout << std::to_string(var) << " = " << context[std::to_string(var)] << std::endl;
-            }
+            operands.push(left / right);
             break;
         default:
-            throw std::runtime_error("Unknown operator.");
+            throw std::runtime_error("Unsupported operator encountered.");
     }
 }
+
+
+
 
 
 void evaluateAssignment(const std::string& id, const std::string& expression, std::unordered_map<std::string, int>& context) {
@@ -299,22 +277,24 @@ void parseEnd(const Token& token) {
 }
 
 
-int evaluateExpression(const std::vector<std::string>& expression, std::unordered_map<std::string, int>& context) {
+int evaluateExpression(const std::vector<std::string>& parts, std::unordered_map<std::string, int>& context) {
     std::stack<int> operands;
     std::stack<TokenType> operators;
 
-    for (const auto& token : expression) {
-        if (isdigit(token[0])) {
-            operands.push(std::stoi(token));
-        } else if (isalpha(token[0])) {
-            if (context.find(token) != context.end()) {
-                operands.push(context[token]);
-            } else {
-                throw std::runtime_error("Unknown variable: " + token);
-            }
-        } else {
-            TokenType op = getTokenType(token[0]);
+    for (const auto& part : parts) {
+        std::cout << "Evaluating part: " << part << std::endl;
+        if (isdigit(part[0])) {  // If the part is a number
+            operands.push(std::stoi(part));
+        } else if (isalpha(part[0])) {  // If the part is a variable
+            operands.push(context[part]);
+        } else {  // If the part is an operator
+            TokenType op = getTokenType(part[0]);
+            std::cout << "Encountered operator: " << static_cast<int>(op) << std::endl;
             while (!operators.empty() && precedence(op) <= precedence(operators.top())) {
+                if (operands.size() < 2) {
+                    std::cerr << "Error: Not enough operands for operator. Needed 2, found " << operands.size() << std::endl;
+                    throw std::runtime_error("Not enough operands for operator operand is here: " + std::to_string(static_cast<int>(op)));
+                }
                 processOperator(operators.top(), operands, context);
                 operators.pop();
             }
@@ -322,19 +302,37 @@ int evaluateExpression(const std::vector<std::string>& expression, std::unordere
         }
     }
 
-    while (!operators.empty()) {
+            while (!operators.empty()) {
+        if (operands.size() < 2) {
+            int numOperands = operands.size();
+            std::cerr << "Error: Not enough operands for operator. Needed 2, found " << numOperands << std::endl;
+            throw std::runtime_error("Not enough operands for operator. Needed 2, found " + std::to_string(numOperands));
+        }
         processOperator(operators.top(), operands, context);
         operators.pop();
     }
 
-    if (operands.size() == 1) {
-        return operands.top();
-    } else {
-        throw std::runtime_error("Invalid expression.");
+
+
+    if (operands.size() != 1) {
+        std::cerr << "Error: Invalid expression. More than one operand left after evaluation." << std::endl;
+        throw std::runtime_error("Invalid expression: more than one operand left after evaluation.");
     }
+
+    return operands.top();
 }
 
 
+
+bool isOperator(char c) {
+    switch (c) {
+        case '+': case '-': case '*': case '/': case '=':
+        case '(': case ')': case '<': case '>': case '!':
+            return true;
+        default:
+            return false;
+    }
+}
 
 void parseAssignment(const Token& token, std::unordered_map<std::string, int>& context) {
     std::string::size_type equalsPos = token.value.find('=');
@@ -343,12 +341,26 @@ void parseAssignment(const Token& token, std::unordered_map<std::string, int>& c
     }
     std::string id = token.value.substr(0, equalsPos);
     std::string expr = token.value.substr(equalsPos + 1);
+
     // Remove any spaces from the variable name
     id.erase(std::remove_if(id.begin(), id.end(), ::isspace), id.end());
-    std::cout << "Parsed assignment: " << id << " = " << expr << std::endl;
+
+    // Add spaces around the operators in the expression
+    std::string spacedExpr;
+    for (size_t i = 0; i < expr.size(); ++i) {
+        if (expr[i] == '+' || expr[i] == '-' || expr[i] == '*' || expr[i] == '/') {
+            spacedExpr += ' ';
+            spacedExpr += expr[i];
+            spacedExpr += ' ';
+        } else {
+            spacedExpr += expr[i];
+        }
+    }
+    std:: cout << "\n";
+    std::cout << "Parsed assignment: in parse assigment " << id << " = " << spacedExpr << std::endl;
 
     // Parse the expression and store the result in the context
-    std::istringstream iss(expr);
+    std::istringstream iss(spacedExpr);
     std::vector<std::string> parts;
     std::string part;
     while (iss >> part) {
@@ -359,6 +371,9 @@ void parseAssignment(const Token& token, std::unordered_map<std::string, int>& c
     int result = evaluateExpression(parts, context);
     context[id] = result;
 }
+
+
+
 
 std::vector<std::string> printVariables;
 
@@ -453,4 +468,6 @@ int main(int argc, char* argv[]) {
     */
     return 0;
 }
+
+
 
