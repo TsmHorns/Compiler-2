@@ -9,7 +9,6 @@
 #include <stack>
 #include <algorithm> 
 
-
 enum class TokenType {
     ID, NUM, ASSIGN, PRINT, STRING, SEMICOLON, END, COMMENT, 
     PLUS, MINUS, MULTIPLY, DIVIDE, GREATER_THAN, LESS_THAN, 
@@ -17,9 +16,6 @@ enum class TokenType {
     LEFT_PAREN, RIGHT_PAREN, NUMBER, COMMA, NEWLINE, 
     IF, ELSE, FUNCTION_DEF, FUNCTION_CALL, RETURN, SCOPE, ASSIGNMENT_FUNCTION_CALL
 };
-
-
-class FunctionDefNode; // Forward declaration
 
 
 struct Token { // Debugging: Defined a struct for tokens
@@ -31,37 +27,12 @@ struct Token { // Debugging: Defined a struct for tokens
         : type(type), value(value), indent_level(indent_level) {}
 };
 
+class FunctionDefNode;
 class ASTNode {
 public:
     virtual ~ASTNode() = default;
-    virtual void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, FunctionDefNode*>& functions) = 0;
+    virtual void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, std::unique_ptr<FunctionDefNode>>& functions) = 0;
     virtual std::string toString() const = 0;  // Pure virtual function
-};
-
-
-class FunctionDefNode : public ASTNode {
-private:
-    std::vector<std::unique_ptr<ASTNode>> body;
-    std::string name;
-public:
-    FunctionDefNode(const std::string& n, std::vector<std::unique_ptr<ASTNode>> b) : name(n), body(std::move(b)) {}
-    void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, FunctionDefNode*>& functions) override {
-        auto functionDef = dynamic_cast<FunctionDefNode*>(functions[name]);
-        if (!functionDef) {
-            throw std::runtime_error("Function not found: " + name);
-        }
-        contexts.push(std::unordered_map<std::string, int>());  // Push a new context onto the stack for the function's local variables
-        for (auto& statement : functionDef->getBody()) {
-            statement->evaluate(contexts, functions);
-        }
-        contexts.pop();  // Pop the function's local context off the stack
-    }
-    const std::vector<std::unique_ptr<ASTNode>>& getBody() const {
-        return body;
-    }
-    const std::string& getName() const {
-        return name;
-    }
 };
 
 class FunctionCallNode : public ASTNode {
@@ -76,28 +47,47 @@ public:
         return "FunctionCallNode: " + functionName + "(" + arguments + ")";
     }
 
-    void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, FunctionDefNode*>& functions) override {
+            void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, std::unique_ptr<FunctionDefNode>>& functions) override {
+
         // Implementation of evaluate for FunctionCallNode
         // This will depend on how you've implemented your language
     }
 };
 
 
+class FunctionDefNode : public ASTNode {
+public:
+    FunctionDefNode(const std::string& name, const std::string& body) : name(name), body(body) {}
+        void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, std::unique_ptr<FunctionDefNode>>& functions) override {
+
+        // Provide an implementation for evaluate
+    }
+
+    std::string toString() const override {
+        return "FunctionDefNode: " + name + "(" + body + ")";
+    }
+private:
+    std::string name;
+    std::string body;
+};
+
+
 class Interpreter {
-    std::string current_token;  // Add this line
+    std::string current_token;
     std::stack<std::unordered_map<std::string, int>> scopes;
-    std::unordered_map<std::string, std::unique_ptr<FunctionDefNode>> functions;  // Add this line
+    std::unordered_map<std::string, std::unique_ptr<FunctionDefNode>> functions;
+    int returnValue;
 
 public:
-    std::stack<FunctionCallNode*> functionCallStack;  // Stack of function calls
+    std::stack<FunctionCallNode*> functionCallStack;
 
     void enterScope() {
-        scopes.push(std::unordered_map<std::string, int>());  // Push a new scope
+        scopes.push(std::unordered_map<std::string, int>());
     }
 
     void leaveScope() {
         if (!scopes.empty()) {
-            scopes.pop();  // Pop the current scope
+            scopes.pop();
         }
     }
 
@@ -105,51 +95,79 @@ public:
         if (!scopes.empty() && scopes.top().count(name) > 0) {
             return scopes.top().at(name);
         }
-        throw std::runtime_error("Variable not found: " + name);
+        throw std::runtime_error("Variable not found inside getVariable in Interpreter: " + name);
     }
 
     void addFunction(const std::string& name, std::unique_ptr<FunctionDefNode> functionDefNode) {
-        functions[name] = std::move(functionDefNode);
+    functions[name] = std::move(functionDefNode);
+}
+    void setCurrentToken(const std::string& token) { current_token = token; }
+
+    std::string getCurrentToken() { return current_token; }
+
+    int evaluate(const std::string& expression) {
+        // TODO: Implement expression evaluation
+        return 0;
     }
-    void setCurrentToken(const std::string& token) { current_token = token; }  // Setter for current_token
 
-    std::string getCurrentToken() { return current_token; }  // Add this line
+    void setReturnValue(int value) {
+        returnValue = value;
+    }
 
+    int callFunction(const std::string& functionName) {
+        if (functions.count(functionName) == 0) {
+            throw std::runtime_error("Function not found: " + functionName);
+        }
+
+        // Call the function and return the result
+        functions[functionName]->evaluate(scopes, functions);
+        return returnValue;
+    }
+
+    void parseFunctionDef(const Token& token, Interpreter& interpreter) {
+    size_t openParenthesisPos = token.value.find('(');
+    size_t closeParenthesisPos = token.value.find(')');
+    std::string functionName = token.value.substr(0, openParenthesisPos);
+    std::string functionBody = token.value.substr(closeParenthesisPos + 1);
+
+    std::unique_ptr<FunctionDefNode> node = std::make_unique<FunctionDefNode>(functionName, functionBody);
+    interpreter.addFunction(functionName, std::move(node));
+}
 };
 
-/*
-class VariableNode : public ASTNode {
-    std::string name;
-public:
-    VariableNode(const std::string& n) : name(n) {}
-    void evaluate(std::unordered_map<std::string, int>& context) override {
-    auto it = context.find(name);
-    if (it == context.end()) {
-        throw std::runtime_error("Variable " + name + " not found in context.");
-    }
-    context["__expr_result"] = it->second;
+
+
+
+
+
+
+
+
+// Change the way you're adding functions to the interpreter
+void parseFunctionDef(const Token& token, Interpreter& interpreter) {
+    size_t openParenthesisPos = token.value.find('(');
+    size_t closeParenthesisPos = token.value.find(')');
+    std::string functionName = token.value.substr(0, openParenthesisPos);
+    std::string functionBody = token.value.substr(closeParenthesisPos + 1);
+
+    std::unique_ptr<FunctionDefNode> node = std::make_unique<FunctionDefNode>(functionName, functionBody);
+    interpreter.addFunction(functionName, std::move(node));
 }
 
 
-    std::string toString() const override {
-        return "VariableNode: " + name;
-    }
-};
-
-*/
 
 class VariableNode : public ASTNode {
     std::string name;
 public:
     VariableNode(const std::string& n) : name(n) {}
-    void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, FunctionDefNode*>& functions) override {
+    void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, std::unique_ptr<FunctionDefNode>>& functions) override {
         if (contexts.empty()) {
-            throw std::runtime_error("No context available.");
+            throw std::runtime_error("No context available in variable node .");
         }
         auto& context = contexts.top();  // Get the current context
         auto it = context.find(name);
         if (it == context.end()) {
-            throw std::runtime_error("Variable " + name + " not found in context.");
+            throw std::runtime_error("Variable " + name + " not found in context in variablenode.");
         }
         context["__expr_result"] = it->second;
     }
@@ -161,7 +179,7 @@ class PrintNode : public ASTNode {
 public:
     PrintNode(std::vector<std::unique_ptr<ASTNode>> parts) : parts(std::move(parts)) {}
 
-    void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, FunctionDefNode*>& functions) override {
+    void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, std::unique_ptr<FunctionDefNode>>& functions) override {
     for (auto& part : parts) {
         part->evaluate(contexts, functions);
         int result = contexts.top()["__expr_result"];
@@ -186,7 +204,7 @@ public:
     IfNode(std::unique_ptr<ASTNode> cond, std::vector<std::unique_ptr<ASTNode>> ifBlk, std::vector<std::unique_ptr<ASTNode>> elseBlk)
         : condition(std::move(cond)), ifBlock(std::move(ifBlk)), elseBlock(std::move(elseBlk)) {}
 
-    void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, FunctionDefNode*>& functions) override {
+    void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, std::unique_ptr<FunctionDefNode>>& functions) override {
     if (contexts.empty()) {
         throw std::runtime_error("No context available.");
     }
@@ -200,41 +218,13 @@ public:
     }
 };
 
-/*
-class AssignmentNode : public ASTNode {
-    std::string id;
-    std::unique_ptr<ASTNode> expression;
-
-public:
-    AssignmentNode(std::string varId, std::unique_ptr<ASTNode> expr)
-        : id(varId), expression(std::move(expr)) {}
-
-    void evaluate(std::unordered_map<std::string, int>& context) override {
-    std::cout << "Evaluating expression for assignment to " << id << "...\n";
-    expression->evaluate(context);  // Evaluate the expression on the right-hand side
-    if (context.count("__expr_result") > 0) {
-        context[id] = context["__expr_result"];  // Assign the result to the variable in the context
-        std::cout << id << " is now " << context[id] << "\n";  // Output the new value of the variable
-    } else {
-        throw std::runtime_error("Expression did not produce a result for assignment.");
-    }
-}
-
-
-    std::string toString() const override {
-        return "AssignmentNode with id: " + id;
-    }
-};
-
-
-*/
 
 class AssignmentNode : public ASTNode {
     std::string name;
     std::unique_ptr<ASTNode> value;
 public:
     AssignmentNode(const std::string& n, std::unique_ptr<ASTNode> v) : name(n), value(std::move(v)) {}
-    void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, FunctionDefNode*>& functions) override {
+    void evaluate(std::stack<std::unordered_map<std::string, int>>& contexts, std::unordered_map<std::string, std::unique_ptr<FunctionDefNode>>& functions) override {
     if (contexts.empty()) {
         throw std::runtime_error("No context available.");
     }
@@ -243,11 +233,6 @@ public:
     // rest of the code
 }
 };
-
-
-
-
-
 
 TokenType getTokenType(char ch) { // Debugging: Defined getTokenType function
     switch (ch) { // Debugging: Checked for different characters
@@ -475,45 +460,6 @@ bool isOperator(char c) {
     }
 }
 
-/*
-void parseAssignment(const Token& token, std::unordered_map<std::string, int>& context) {
-    std::string::size_type equalsPos = token.value.find('=');
-    if (equalsPos == std::string::npos) {
-        throw std::runtime_error("Invalid assignment format.");
-    }
-    std::string id = token.value.substr(0, equalsPos);
-    std::string expr = token.value.substr(equalsPos + 1);
-
-    // Remove any spaces from the variable name
-    id.erase(std::remove_if(id.begin(), id.end(), ::isspace), id.end());
-
-    // Add spaces around the operators in the expression
-    std::string spacedExpr;
-    for (size_t i = 0; i < expr.size(); ++i) {
-        if (expr[i] == '+' || expr[i] == '-' || expr[i] == '*' || expr[i] == '/') {
-            spacedExpr += ' ';
-            spacedExpr += expr[i];
-            spacedExpr += ' ';
-        } else {
-            spacedExpr += expr[i];
-        }
-    }
-    std:: cout << "\n";
-    std::cout << "Parsed assignment: in parse assigment " << id << " = " << spacedExpr << std::endl;
-
-    // Parse the expression and store the result in the context
-    std::istringstream iss(spacedExpr);
-    std::vector<std::string> parts;
-    std::string part;
-    while (iss >> part) {
-        parts.push_back(part);
-    }
-
-    // Evaluate the expression
-    int result = evaluateExpression(parts, context);
-    context[id] = result;
-}
-*/
 
 void parseAssignment(const Token& token, std::unordered_map<std::string, int>& context, Interpreter& interpreter) {
     std::string::size_type equalsPos = token.value.find('=');
@@ -570,25 +516,30 @@ void parsePrint(const Token& token, std::unordered_map<std::string, int>& contex
     // Remove whitespace from the second part
     secondPart.erase(remove_if(secondPart.begin(), secondPart.end(), isspace), secondPart.end());
 
+    // If the second part ends with a closing parenthesis ")", remove it
+    if (!secondPart.empty() && secondPart.back() == ')') {
+        secondPart.pop_back();
+    }
+
+    // Find the position of the opening parenthesis "(" in the first part
+    std::size_t openParenPos = firstPart.find('(');
+    if (openParenPos != std::string::npos) {
+        // Remove everything before and including the opening parenthesis
+        firstPart = firstPart.substr(openParenPos + 1);
+    }
+
     // Remove quotation marks from the first part
     firstPart.erase(remove(firstPart.begin(), firstPart.end(), '\"'), firstPart.end());
 
     // Check if the variable exists in the context
     if (context.find(secondPart) == context.end()) {
-        throw std::runtime_error("Variable " + secondPart + " not found.");
+        throw std::runtime_error("Variable " + secondPart + " not found in parsePrint.");
     }
 
     // Print the first part and the value of the variable
     std::cout << firstPart << " " << context[secondPart] << std::endl;
 }
 
-void parseFunctionDef(const Token& token, Interpreter& interpreter) {
-    // Tokenize the function definition
-    // The first token should be the function name
-    // The remaining tokens represent the function body
-    // Create a FunctionDefNode with the function name and body
-    // Add the FunctionDefNode to the interpreter
-}
 
 void parseFunctionCall(const Token& token, Interpreter& interpreter) {
     // Extract the function name and arguments from the token value
@@ -604,6 +555,29 @@ void parseFunctionCall(const Token& token, Interpreter& interpreter) {
     interpreter.functionCallStack.push(node);
 }
 
+void parseReturn(const Token& token, Interpreter& interpreter) {
+    // Extract the return value from the token value
+    std::string returnValue = token.value.substr(7); // Skip the "return " part
+
+    // Evaluate the return value
+    int value = interpreter.evaluate(returnValue);
+
+    // Set the return value in the interpreter
+    interpreter.setReturnValue(value);
+}
+
+void parseAssignmentFunctionCall(const Token& token, std::unordered_map<std::string, int>& context, Interpreter& interpreter) {
+    // Extract the variable name, function name, and arguments from the token value
+    size_t equalsPos = token.value.find('=');
+    std::string variableName = token.value.substr(0, equalsPos);
+    std::string functionCall = token.value.substr(equalsPos + 1);
+
+    // Call the function and get the return value
+    int returnValue = interpreter.callFunction(functionCall);
+
+    // Assign the return value to the variable in the context
+    context[variableName] = returnValue;
+}
 
 void parseProgram(const std::vector<Token>& tokens, std::unordered_map<std::string, int>& context, std::vector<Token>& printStatements, Interpreter& interpreter) {
     std::cout << "*************************" << "\n";
@@ -630,15 +604,20 @@ void parseProgram(const std::vector<Token>& tokens, std::unordered_map<std::stri
                 }
                 break;
             case TokenType::FUNCTION_CALL:
-            parseFunctionCall(token, interpreter);
-            break;
+                parseFunctionCall(token, interpreter);
+                break;
+            case TokenType::RETURN:
+                parseReturn(token, interpreter);
+                break;
+            case TokenType::ASSIGNMENT_FUNCTION_CALL:
+                parseAssignmentFunctionCall(token, context, interpreter);
+                break;
             default:
-                throw std::runtime_error("Unexpected token type.");
+                throw std::runtime_error("Unexpected token type in parseProgram.");
         }
     }
     std::cout << "*************************" << "\n";
 }
-
 
 
 int main(int argc, char* argv[]) {
