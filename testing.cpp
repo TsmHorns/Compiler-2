@@ -259,14 +259,14 @@ TokenType getTokenType(char ch) { // Debugging: Defined getTokenType function
 
 
 std::vector<Token> tokenize(const std::string& input, Interpreter& interpreter) {
+    
     std::vector<Token> tokens;
     std::istringstream iss(input);
     std::string line;
-    int spacesPerIndent = -1;  // We'll calculate this based on the first non-empty line
     int currentIndentLevel = 0;  // Keep track of the current indentation level
+    int indentSize = -1;  // The number of spaces that represent one indent level
     std::string currentFunctionName;  // Keep track of the current function name
 
-    int indentLevel = 0;
     while (std::getline(iss, line)) {
         while (!line.empty() && std::iscntrl(line.back())) {
             line.pop_back();  // Remove trailing control character
@@ -276,59 +276,63 @@ std::vector<Token> tokenize(const std::string& input, Interpreter& interpreter) 
             continue; // Skip empty lines and comments
         }
 
-        indentLevel = 0;
+        int indentLevel = 0;
         while (indentLevel < line.size() && line[indentLevel] == ' ') {
             ++indentLevel;
         }
 
-        if (spacesPerIndent != 0) {
-    indentLevel /= spacesPerIndent;  // Calculate the indentation level
-}
-
-        indentLevel /= spacesPerIndent;  // Calculate the indentation level
-    if (indentLevel < currentIndentLevel) {
-        currentFunctionName = "";
-        currentIndentLevel = indentLevel;
-    }
-if (line.substr(indentLevel, 3) == "def") {
-    std::string functionName = line.substr(indentLevel + 4);  // Extract the function name
-    tokens.emplace_back(TokenType::FUNCTION_DEF, functionName, indentLevel);  // Emplace the def token with the function name as its value
-    std::cout << "\nEmplacing def with name: " << functionName << "\nIndent level: " << indentLevel << "\n";
-    currentFunctionName = functionName;  // Assign the current function name
-    currentIndentLevel++;  // Increment the current indentation level
-}  
-else if (line.substr(0, 5) == "print") {
-        tokens.emplace_back(TokenType::PRINT, line, indentLevel);
-        std::cout << "Emplacing PRINT token with value: " << line << std::endl;
-} 
-else if (line.find('(') != std::string::npos && line.find(')') != std::string::npos && line.find('=') != std::string::npos) {
-    tokens.emplace_back(TokenType::ASSIGNMENT_FUNCTION_CALL, line, indentLevel);  // Emplace the assignment function call token with the entire line as its value
-    std::cout << "\nEmplacing ASSIGNMENT_FUNCTION_CALL token with value: " << line << "\nIndent level: " << indentLevel << "\n";
-} else if (line.find('=') != std::string::npos) {
-    tokens.emplace_back(TokenType::ASSIGN, line, indentLevel);
-    std::cout << "\nEmplacing ASSIGNMENT token with value: " << line << "\nIndent level: " << indentLevel << "\n";
-}
-   else if (line.find("return") != std::string::npos) {
-    tokens.emplace_back(TokenType::RETURN, line, indentLevel);  // Emplace the return token with the entire line as its value
-    std::cout << "\nEmplacing RETURN token with value: " << line << "\nIndent level: " << indentLevel << "\n";
-} else if (line.find(currentFunctionName) != std::string::npos) {
-    tokens.emplace_back(TokenType::FUNCTION_CALL, line, indentLevel);  // Emplace the function call token with the entire line as its value
-    std::cout << "\nEmplacing FUNCTION_CALL token with value: " << line << "\nIndent level: " << indentLevel << "\n";
-} else {
-    size_t equalsPos = line.find('=');
-    if (equalsPos != std::string::npos) {
-        tokens.emplace_back(TokenType::ASSIGN, line, indentLevel);
-        std::cout << "\nEmplacing ASSIGNMENT token with value: " << line << "\nIndent level: " << indentLevel << "\n";
-    }
-}
+        if (indentSize == -1 && indentLevel > 0) {
+            indentSize = indentLevel;  // Set the indent size on the first indented line
         }
+
+        if (indentSize != -1 && indentSize != 0) {  // Check if indentSize is not zero before division
+            currentIndentLevel = indentLevel / indentSize;  // Calculate the current indent level
+        }
+        if (line.substr(indentLevel, 3) == "def") {
+            std::string functionName = line.substr(indentLevel + 4);  // Extract the function name
+            tokens.emplace_back(TokenType::FUNCTION_DEF, functionName, currentIndentLevel);  // Emplace the def token with the function name as its value
+            std::cout << "\nEmplacing def with name: " << functionName << "\nIndent level: " << currentIndentLevel << "\n";
+            currentFunctionName = functionName;  // Assign the current function name
+        }  
+        else if (line.substr(indentLevel, 5) == "print") {
+            tokens.emplace_back(TokenType::PRINT, line, currentIndentLevel);
+            std::cout << "Emplacing PRINT token with value: " << line << std::endl;
+        } 
+        else if (line.find('(') != std::string::npos && line.find(')') != std::string::npos && line.find('=') != std::string::npos) {
+            tokens.emplace_back(TokenType::ASSIGNMENT_FUNCTION_CALL, line, currentIndentLevel);  // Emplace the assignment function call token with the entire line as its value
+            std::cout << "\nEmplacing ASSIGNMENT_FUNCTION_CALL token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
+        } else if (line.find('=') != std::string::npos) {
+            tokens.emplace_back(TokenType::ASSIGN, line, currentIndentLevel);
+            std::cout << "\nEmplacing ASSIGNMENT token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
+        }
+        else if (line.find("return") != std::string::npos) {
+            tokens.emplace_back(TokenType::RETURN, line, currentIndentLevel);  // Emplace the return token with the entire line as its value
+            std::cout << "\nEmplacing RETURN token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
+        } else if (line.find(currentFunctionName) != std::string::npos) {
+            tokens.emplace_back(TokenType::FUNCTION_CALL, line, currentIndentLevel);  // Emplace the function call token with the entire line as its value
+            std::cout << "\nEmplacing FUNCTION_CALL token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
+        } 
+        if (line.substr(indentLevel, 2) == "if") {
+            tokens.emplace_back(TokenType::IF, line, currentIndentLevel);
+            std::cout << "\nEmplacing IF token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
+        } else if (line.substr(indentLevel, 4) == "else") {
+            tokens.emplace_back(TokenType::ELSE, "", currentIndentLevel);
+            std::cout << "\nEmplacing ELSE token\nIndent level: " << currentIndentLevel << "\n";
+        }
+        else {
+            size_t equalsPos = line.find('=');
+            if (equalsPos != std::string::npos) {
+                tokens.emplace_back(TokenType::ASSIGN, line, currentIndentLevel);
+                std::cout << "\nEmplacing ASSIGNMENT token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
+            }
+        }
+    }
 
     std::cout << "\nEmplacing END token\n";
     tokens.emplace_back(TokenType::END, "", 0);
     std::cout << "\nFinished tokenizing\n";
     return tokens;
 }
-
 
 int precedence(TokenType op) {
     switch (op) {
@@ -616,8 +620,16 @@ void parseProgram(const std::vector<Token>& tokens, std::unordered_map<std::stri
             case TokenType::ASSIGNMENT_FUNCTION_CALL:
                 parseAssignmentFunctionCall(token, context, interpreter);
                 break;
+             case TokenType::IF:
+                std::cout << "Encountered IF token with value: " << token.value << "\n";
+                break;
+            case TokenType::ELSE:
+                std::cout << "Encountered ELSE token\n";
+                break;
             default:
-                throw std::runtime_error("Unexpected token type in parseProgram.");
+                std::stringstream ss;
+                ss << "Unexpected token type in parseProgram: " << static_cast<int>(token.type);
+                throw std::runtime_error(ss.str());
         }
     }
     std::cout << "*************************" << "\n";
