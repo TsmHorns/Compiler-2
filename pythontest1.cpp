@@ -33,18 +33,18 @@ public:
 };
 
 
-
-
 class VariableNode : public ASTNode {
     std::string name;
 public:
     VariableNode(const std::string& n) : name(n) {}
     void evaluate(std::unordered_map<std::string, int>& context) override {
-    if (context.find(name) == context.end()) {
+    auto it = context.find(name);
+    if (it == context.end()) {
         throw std::runtime_error("Variable " + name + " not found in context.");
     }
-    context["__expr_result"] = context[name];
+    context["__expr_result"] = it->second;
 }
+
 
     std::string toString() const override {
         return "VariableNode: " + name;
@@ -215,46 +215,59 @@ int precedence(TokenType op) {
     }
 }
 
-void processOperator(TokenType op, std::stack<int>& operands) {
-    if (operands.size() < 2) {
-        throw std::runtime_error("Invalid expression.");
-    }
-
-    int right = operands.top();
-    operands.pop();
-    int left = operands.top();
-    operands.pop();
-
-    int result;
+void processOperator(TokenType op, std::stack<int>& operands, std::unordered_map<std::string, int>& context) {
+    int left, right;
+    int var; // Declare var outside the switch statement
     switch (op) {
         case TokenType::PLUS:
-            result = left + right;
-            std::cout << "Processed PLUS operator: " << left << " + " << right << " = " << result << "\n";
-            break;
         case TokenType::MINUS:
-            result = left - right;
-            std::cout << "Processed MINUS operator: " << left << " - " << right << " = " << result << "\n";
-            break;
         case TokenType::MULTIPLY:
-            result = left * right;
-            std::cout << "Processed MULTIPLY operator: " << left << " * " << right << " = " << result << "\n";
-            break;
         case TokenType::DIVIDE:
-            if (right == 0) {
-                throw std::runtime_error("Division by zero.");
+            if (operands.size() < 2) {
+                throw std::runtime_error("Not enough operands for operator.");
             }
-            result = left / right;
-            std::cout << "Processed DIVIDE operator: " << left << " / " << right << " = " << result << "\n";
+            right = operands.top();
+            operands.pop();
+            left = operands.top();
+            operands.pop();
+            if (op == TokenType::PLUS) {
+                operands.push(left + right);
+            } else if (op == TokenType::MINUS) {
+                operands.push(left - right);
+            } else if (op == TokenType::MULTIPLY) {
+                operands.push(left * right);
+            } else if (op == TokenType::DIVIDE) {
+                if (right == 0) {
+                    throw std::runtime_error("Division by zero.");
+                }
+                operands.push(left / right);
+            }
+            break;
+        case TokenType::ASSIGN:
+            if (operands.size() < 2) {
+                throw std::runtime_error("Not enough operands for assignment.");
+            }
+            right = operands.top();
+            operands.pop();
+            left = operands.top();
+            operands.pop();
+            context[std::to_string(left)] = right;
+            break;
+        case TokenType::PRINT:
+            if (operands.empty()) {
+                throw std::runtime_error("No operand for printing.");
+            }
+            var = operands.top();
+            operands.pop();
+            if (context.find(std::to_string(var)) != context.end()) {
+                std::cout << std::to_string(var) << " = " << context[std::to_string(var)] << std::endl;
+            }
             break;
         default:
-            throw std::runtime_error("Invalid operator.");
+            throw std::runtime_error("Unknown operator.");
     }
-
-    operands.push(result);
 }
 
-
-   
 
 void evaluateAssignment(const std::string& id, const std::string& expression, std::unordered_map<std::string, int>& context) {
     std::cout << "Evaluating assignment: " << id << " = " << expression << std::endl;
@@ -269,10 +282,11 @@ void evaluateAssignment(const std::string& id, const std::string& expression, st
 
 
 int getVariableValue(const std::string& id, const std::unordered_map<std::string, int>& context) {
-    if (context.find(id) != context.end()) { // Debugging: Checked if variable exists in context
-        return context.at(id); // Debugging: Returned variable value
+    auto it = context.find(id);
+    if (it != context.end()) {
+        return it->second;  // Directly use iterator to access the value
     } else {
-        throw std::runtime_error("Variable not found: " + id); // Debugging: Threw error if variable snot found
+        throw std::runtime_error("Variable not found in get Variable..: " + id);
     }
 }
 
@@ -301,7 +315,7 @@ int evaluateExpression(const std::vector<std::string>& expression, std::unordere
         } else {
             TokenType op = getTokenType(token[0]);
             while (!operators.empty() && precedence(op) <= precedence(operators.top())) {
-                processOperator(operators.top(), operands);
+                processOperator(operators.top(), operands, context);
                 operators.pop();
             }
             operators.push(op);
@@ -309,7 +323,7 @@ int evaluateExpression(const std::vector<std::string>& expression, std::unordere
     }
 
     while (!operators.empty()) {
-        processOperator(operators.top(), operands);
+        processOperator(operators.top(), operands, context);
         operators.pop();
     }
 
@@ -346,8 +360,38 @@ void parseAssignment(const Token& token, std::unordered_map<std::string, int>& c
     context[id] = result;
 }
 
+std::vector<std::string> printVariables;
 
-void parseProgram(const std::vector<Token>& tokens, std::unordered_map<std::string, int>& context) {
+void parsePrint(const Token& token, std::unordered_map<std::string, int>& context) {
+    // Extract the content inside the print statement's parentheses
+    size_t startParen = token.value.find('(');
+    size_t endParen = token.value.find(')');
+    if (startParen == std::string::npos || endParen == std::string::npos || endParen <= startParen) {
+        std::cout << "Syntax error in print statement: Missing or incorrect parentheses." << std::endl;
+        return;
+    }
+    std::string content = token.value.substr(startParen + 1, endParen - startParen - 1);
+
+    // Extract variable names separated by commas
+    std::istringstream varStream(content);
+    std::string varName;
+    while (std::getline(varStream, varName, ',')) {
+        // Remove leading and trailing whitespace
+        varName.erase(varName.find_last_not_of(" \t\n\r\f\v") + 1);
+        varName.erase(0, varName.find_first_not_of(" \t\n\r\f\v"));
+        
+        auto it = context.find(varName);
+        if (it != context.end()) {
+            std::cout << varName << " = " << it->second << std::endl;
+        } else {
+            //std::cout << "Variable " << varName << " not found in parsePrint." << std::endl;
+        }
+    }
+}
+
+
+
+void parseProgram(const std::vector<Token>& tokens, std::unordered_map<std::string, int>& context, std::vector<Token>& printStatements) {
     std::cout << "*************************" << "\n";
     for (const Token& token : tokens) {
         switch (token.type) {
@@ -355,16 +399,17 @@ void parseProgram(const std::vector<Token>& tokens, std::unordered_map<std::stri
                 parseAssignment(token, context);
                 break;
             case TokenType::PRINT:
-                //parsePrint(token); // Assuming this was meant to be parseEnd
-                parseEnd(token);
+                printStatements.push_back(token); // Store print tokens for later processing
                 break;
             case TokenType::END:
+                // Handling end token if necessary, e.g., cleanup or summary actions
                 parseEnd(token);
                 break;
             default:
                 throw std::runtime_error("Unexpected token type.");
         }
     }
+    std::cout << "*************************" << "\n";
 }
 
 
@@ -386,13 +431,26 @@ int main(int argc, char* argv[]) {
     auto tokens = tokenize(input);
     
     std::unordered_map<std::string, int> context;  // This will hold variable values
+    std::vector<Token> printStatements; // Store print statements to handle after all evaluations
 
-    parseProgram(tokens, context);
+    // Parse and evaluate all tokens, store print statements for later
+    parseProgram(tokens, context, printStatements);
 
-    // Print out the context to see all variable values
+
+
+    // Now handle print statements
+    for (const auto& token : printStatements) {
+        parsePrint(token, context);
+    }
+
+    /*
+    // Optionally print all context variables
+    std::cout << "Final Variable Values:\n";
     for (const auto& pair : context) {
         std::cout << pair.first << " = " << pair.second << std::endl;
     }
-    
+
+    */
     return 0;
 }
+
