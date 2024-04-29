@@ -329,9 +329,9 @@ std::vector<Token> tokenize(const std::string& input, Interpreter& interpreter) 
         else if (line.find('(') != std::string::npos && line.find(')') != std::string::npos && line.find('=') != std::string::npos) {
             tokens.emplace_back(TokenType::ASSIGNMENT_FUNCTION_CALL, line, currentIndentLevel);  // Emplace the assignment function call token with the entire line as its value
             //std::cout << "\nEmplacing ASSIGNMENT_FUNCTION_CALL token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
-        } else if (line.find('=') != std::string::npos) {
+        } else if (line.find('=') != std::string::npos && !(line.substr(indentLevel, 2) == "if" or line.substr(indentLevel, 4) == "else")) {
             tokens.emplace_back(TokenType::ASSIGN, line, currentIndentLevel);
-            //std::cout << "\nEmplacing ASSIGNMENT token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
+            // std::cout << "\nEmplacing ASSIGNMENT token with value: " << line << "\nIndent level: " << currentIndentLevel << "\n";
         }
         else if (line.find("return") != std::string::npos) {
             tokens.emplace_back(TokenType::RETURN, line, currentIndentLevel);  // Emplace the return token with the entire line as its value
@@ -606,8 +606,15 @@ void parseAssignmentFunctionCall(const Token& token, std::unordered_map<std::str
     context[variableName] = returnValue;
 }
 
+
+void parseIF(const Token& token, Interpreter& interpreter) {
+    // Extract the conditional statement from the IF statement
+    std::string conditionalStatment = token.value.substr(3); 
+    // std::cout << "parseif" << conditionalStatment << std::endl;
+
+}
 void parseProgram(const std::vector<Token>& tokens, std::unordered_map<std::string, int>& context, std::vector<Token>& printStatements, Interpreter& interpreter) {
-    //std::cout << "*************************" << "\n";
+    // std::cout << "*************************" << "\n";
     size_t i = 0;
     for (const Token& token : tokens) {
         switch (token.type) {
@@ -642,6 +649,7 @@ void parseProgram(const std::vector<Token>& tokens, std::unordered_map<std::stri
                // parseAssignmentFunctionCall(token, context, interpreter);
                 break;
              case TokenType::IF:
+                parseIF(token,interpreter);
                 //std::cout << "Encountered IF token with value: " << token.value << "\n";
                 break;
             case TokenType::ELSE:
